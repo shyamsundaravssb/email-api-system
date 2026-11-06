@@ -1,0 +1,13 @@
+{
+  "email_id": "a1b2c3d4-0000-4000-8000-000000000001",
+  "batch_id": "6f1c2a54-0d3e-4b8a-9a77-3c5f0b1e2d10",
+  "message_id": "<a1b2c3d4-0000-4000-8000-000000000001@grasshopper.optimoze.com>",
+  "from_email": "test@grasshopper.optimoze.com",
+  "from_name": "Grasshopper",
+  "to_email": "asha@example.com",
+  "to_name": "Asha",
+  "subject": "Your One-Time Password – Grasshopper",
+  "html": "<html><body><h2>Grasshopper</h2><p>Hello Asha,</p><p>Your one-time password (OTP) is:</p><h2>482913</h2><p>Please use this code to complete your verification.</p><p>If you did not request this code, you can safely ignore this email.</p><p>Regards,<br>Team Grasshopper</p></body></html>",
+  "text": "Hello Asha,\n\nYour one-time password (OTP) is: 482913\n\nPlease use this code to complete your verification.\n\nIf you did not request this code, you can safely ignore this email.\n\nRegards,\nTeam Grasshopper",
+  "tracking_token": "9d8c7b6a-1111-4222-8333-444455556666"
+}

@@ -1,0 +1,47 @@
+{
+  "recipients": [
+    {
+      "template_id": "otp_email",
+      "to_email": "asha@example.com",
+      "to_name": "Asha",
+      "variables": {
+        "name": "Asha",
+        "otp": "482913"
+      }
+    },
+    {
+      "template_id": "welcome_email",
+      "to_email": "ravi@example.com",
+      "to_name": "Ravi",
+      "variables": {
+        "name": "Ravi"
+      }
+    },
+    {
+      "template_id": "password_reset",
+      "to_email": "priya@example.com",
+      "to_name": "Priya",
+      "variables": {
+        "name": "Priya",
+        "reset_link": "https://example.com/reset/token123"
+      }
+    },
+    {
+      "template_id": "otp_email",
+      "to_email": "arjun@example.com",
+      "to_name": "Arjun",
+      "variables": {
+        "name": "Arjun",
+        "otp": "739152"
+      }
+    },
+    {
+      "template_id": "welcome_email",
+      "to_email": "meera@example.com",
+      "to_name": "Meera",
+      "variables": {
+        "name": "Meera"
+      }
+    }
+  ]
+}

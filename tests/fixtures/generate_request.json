@@ -1,0 +1,28 @@
+{
+  "batch_id": "6f1c2a54-0d3e-4b8a-9a77-3c5f0b1e2d10",
+  "from_email": "test@grasshopper.optimoze.com",
+  "from_name": "Grasshopper",
+  "items": [
+    {
+      "email_id": "a1b2c3d4-0000-4000-8000-000000000001",
+      "tracking_token": "9d8c7b6a-1111-4222-8333-444455556666",
+      "template_id": "otp_email",
+      "to_email": "asha@example.com",
+      "to_name": "Asha",
+      "variables": {
+        "name": "Asha",
+        "otp": "482913"
+      }
+    },
+    {
+      "email_id": "a1b2c3d4-0000-4000-8000-000000000002",
+      "tracking_token": "9d8c7b6a-1111-4222-8333-444455556667",
+      "template_id": "welcome_email",
+      "to_email": "ravi@example.com",
+      "to_name": "Ravi",
+      "variables": {
+        "name": "Ravi"
+      }
+    }
+  ]
+}

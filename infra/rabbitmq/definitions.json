@@ -1,0 +1,93 @@
+{
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "email.exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "email.send",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-max-length": 1000,
+        "x-overflow": "reject-publish"
+      }
+    },
+    {
+      "name": "email.retry.1",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 10000,
+        "x-dead-letter-exchange": "email.exchange",
+        "x-dead-letter-routing-key": "send"
+      }
+    },
+    {
+      "name": "email.retry.2",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 60000,
+        "x-dead-letter-exchange": "email.exchange",
+        "x-dead-letter-routing-key": "send"
+      }
+    },
+    {
+      "name": "email.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "email.exchange",
+      "vhost": "/",
+      "destination": "email.send",
+      "destination_type": "queue",
+      "routing_key": "send",
+      "arguments": {}
+    },
+    {
+      "source": "email.exchange",
+      "vhost": "/",
+      "destination": "email.retry.1",
+      "destination_type": "queue",
+      "routing_key": "retry.1",
+      "arguments": {}
+    },
+    {
+      "source": "email.exchange",
+      "vhost": "/",
+      "destination": "email.retry.2",
+      "destination_type": "queue",
+      "routing_key": "retry.2",
+      "arguments": {}
+    },
+    {
+      "source": "email.exchange",
+      "vhost": "/",
+      "destination": "email.dlq",
+      "destination_type": "queue",
+      "routing_key": "dead",
+      "arguments": {}
+    }
+  ]
+}

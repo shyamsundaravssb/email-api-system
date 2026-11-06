@@ -1,0 +1,16 @@
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+  rabbitmq:
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+  generation-api:
+    ports:
+      - "8001:8001"
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
