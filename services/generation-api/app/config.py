@@ -74,6 +74,7 @@ class Settings:
     database_url: str
     rabbitmq_url: str
     internal_token: str
+    track_base_url: str = "http://localhost:8002"
 
     generation_concurrency: int = 10
     publish_rate_per_second: int = 50
@@ -87,6 +88,9 @@ class Settings:
             database_url=_build_database_url(),
             rabbitmq_url=_build_rabbitmq_url(),
             internal_token=_required_env("INTERNAL_TOKEN"),
+            track_base_url=os.getenv(
+                "TRACK_BASE_URL", "http://localhost:8002"
+            ).strip().rstrip("/"),
             generation_concurrency=_get_positive_int(
                 "GENERATION_CONCURRENCY", 10
             ),

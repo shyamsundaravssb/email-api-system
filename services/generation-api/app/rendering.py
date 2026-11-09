@@ -1,4 +1,6 @@
 import logging
+import html
+import re
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlsplit
@@ -19,7 +21,7 @@ class TemplateRenderError(Exception):
 
 # Variables that contain URLs must contain absolute HTTP/HTTPS URLs.
 URL_VARIABLES = {
-    "reset_link",
+    "link",
     "dashboard_url",
     "order_url",
     "offer_url",
@@ -273,3 +275,57 @@ def render_email(
         variables=variables,
         required_variables=required_variables,
     )
+
+
+def rewrite_tracking_link(
+    html_content: str,
+    original_url: str,
+    tracking_url: str,
+) -> tuple[str, bool]:
+    """Replace the matching double-quoted HTML href with a tracking URL."""
+
+    pattern = re.compile(
+        r'(?P<prefix>\bhref\s*=\s*")(?P<url>[^"]*)"',
+        re.IGNORECASE,
+    )
+
+    replaced = False
+
+    def replace_match(match):
+        nonlocal replaced
+
+        if html.unescape(match.group("url")) != original_url:
+            return match.group(0)
+
+        replaced = True
+        return (
+            match.group("prefix")
+            + html.escape(tracking_url, quote=True)
+            + '"'
+        )
+
+    return pattern.sub(replace_match, html_content), replaced
+
+
+def append_open_tracking_pixel(
+    html_content: str,
+    tracking_url: str,
+) -> str:
+    """Append a one-pixel open-tracking image to the email HTML."""
+
+    pixel = (
+        f'<img src="{html.escape(tracking_url, quote=True)}" '
+        'width="1" height="1" alt="" style="display:none;" />'
+    )
+
+    if re.search(r"</body\s*>", html_content, re.IGNORECASE):
+        return re.sub(
+            r"</body\s*>",
+            lambda match: pixel + match.group(0),
+            html_content,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+
+    return html_content + pixel
+

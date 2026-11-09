@@ -1,12 +1,17 @@
 import asyncio
 import logging
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.config import Settings
 from app.db import Database
 from app.publisher import RabbitMQPublisher
-from app.rendering import TemplateRenderError, render_email
+from app.rendering import (
+    TemplateRenderError,
+    append_open_tracking_pixel,
+    render_email,
+    rewrite_tracking_link,
+)
 from app.schemas import GenerateItem, GenerateRequest
 
 
@@ -237,6 +242,44 @@ class GenerationProcessor:
                     )
                     return
 
+                # Prepare click and open tracking URLs.
+                tracking_base_url = self.settings.track_base_url
+                html_content = rendered["html"]
+
+                # One click-tracked link per email, supplied as variables["link"].
+                original_link = variables.get("link")
+
+                if isinstance(original_link, str) and original_link.strip():
+                    link_token = str(uuid4())
+                    click_url = f"{tracking_base_url}/c/{link_token}"
+
+                    html_content, link_rewritten = rewrite_tracking_link(
+                        html_content,
+                        original_link,
+                        click_url,
+                    )
+
+                    if link_rewritten:
+                        await self.database.create_tracking_link(
+                            connection,
+                            email["email_id"],
+                            link_token,
+                            original_link,
+                        )
+                    else:
+                        raise TemplateRenderError(
+                            "The link variable was not found in the rendered HTML href"
+                        )
+
+                # Add an open-tracking pixel to every email.
+                open_url = (
+                    f"{tracking_base_url}/o/{email['tracking_token']}"
+                )
+                html_content = append_open_tracking_pixel(
+                    html_content,
+                    open_url,
+                )
+
                 sender_email = email["from_email"]
                 sender_name = email["from_name"]
 
@@ -273,7 +316,7 @@ class GenerationProcessor:
                     "from_email": sender_email,
                     "from_name": sender_name,
                     "subject": rendered["subject"],
-                    "html": rendered["html"],
+                    "html": html_content,
                     "text": rendered["text"],
                     "message_id": message_id,
                     "tracking_token": str(email["tracking_token"]),

@@ -161,6 +161,30 @@ class Database:
 
         return dict(row) if row else None
 
+    async def create_tracking_link(
+        self,
+        connection: asyncpg.Connection,
+        email_id: UUID,
+        link_token: str,
+        original_url: str,
+    ) -> int:
+        """Save the original URL and its click-tracking token."""
+
+        return await connection.fetchval(
+            """
+            INSERT INTO tracking_links (
+                email_id,
+                link_token,
+                original_url
+            )
+            VALUES ($1, $2, $3)
+            RETURNING id
+            """,
+            email_id,
+            link_token,
+            original_url,
+        )
+
     async def mark_queued(
         self,
         connection: asyncpg.Connection,
