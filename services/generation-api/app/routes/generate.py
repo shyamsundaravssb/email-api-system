@@ -10,13 +10,7 @@ from fastapi import (
     status,
 )
 
-from app.generation_engine import generate_preview
-from app.rendering import TemplateRenderError
-from app.schemas import (
-    GenerateRequest,
-    GenerateResponse,
-    GeneratePreviewResponse,
-)
+from app.schemas import GenerateRequest, GenerateResponse
 
 
 logger = logging.getLogger(__name__)
@@ -50,46 +44,6 @@ def validate_batch_size(request: Request, payload: GenerateRequest) -> None:
 
 
 @router.post(
-    "/internal/generate/preview",
-    response_model=GeneratePreviewResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def generate_preview_endpoint(
-    payload: GenerateRequest,
-    request: Request,
-    internal_token: str | None = Header(
-        default=None,
-        alias="X-Internal-Token",
-    ),
-):
-    """Render personalized email content without sending or queueing it."""
-
-    authenticate(request, internal_token)
-    validate_batch_size(request, payload)
-
-    try:
-        generated_emails = generate_preview(payload)
-    except TemplateRenderError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
-
-    logger.info(
-        "Generated preview for batch %s: %s emails",
-        payload.batch_id,
-        len(generated_emails),
-    )
-
-    return GeneratePreviewResponse(
-        batch_id=payload.batch_id,
-        received=len(payload.items),
-        generated_count=len(generated_emails),
-        emails=generated_emails,
-    )
-
-
-@router.post(
     "/internal/generate",
     response_model=GenerateResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -108,15 +62,12 @@ async def generate(
     authenticate(request, internal_token)
     validate_batch_size(request, payload)
 
-    processor = getattr(request.app.state, "processor", None)
+    processor = request.app.state.processor
 
     if processor is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Integrated generation is unavailable in standalone mode. "
-                "Use /internal/generate/preview for rendering tests."
-            ),
+            detail="Generation service is temporarily unavailable.",
         )
 
     background_tasks.add_task(processor.process_batch, payload)

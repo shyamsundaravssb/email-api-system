@@ -1,4 +1,3 @@
-
 from typing import Any
 from uuid import UUID
 
@@ -89,51 +88,3 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     batch_id: UUID
     received: int
-
-class GeneratePreviewEmail(BaseModel):
-    email_id: UUID
-    batch_id: UUID
-    template_id: str
-
-    to_email: EmailStr
-    to_name: str | None = None
-
-    from_email: EmailStr
-    from_name: str | None = None
-
-    subject: str
-    html: str
-    text: str
-
-    message_id: str
-    tracking_token: UUID
-
-
-class GeneratePreviewResponse(BaseModel):
-    batch_id: UUID
-    received: int
-    generated_count: int
-
-    emails: list[GeneratePreviewEmail]
-
-
-class GeneratePreviewEmail(BaseModel):
-    email_id: UUID
-    batch_id: UUID
-    template_id: str
-    to_email: EmailStr
-    to_name: str | None = None
-    from_email: EmailStr
-    from_name: str | None = None
-    subject: str
-    html: str
-    text: str
-    message_id: str
-    tracking_token: UUID
-
-
-class GeneratePreviewResponse(BaseModel):
-    batch_id: UUID
-    received: int
-    generated_count: int
-    emails: list[GeneratePreviewEmail]
