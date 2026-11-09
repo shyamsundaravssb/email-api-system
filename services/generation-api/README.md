@@ -1,3 +1,184 @@
+## Quick Start – How to Use the Generation API
+
+### 1. What does this API do?
+
+The Generation API is Part B of the Email API System.
+
+It receives email-generation requests from the Ingestion API (Part A), retrieves the corresponding accepted email records and templates from PostgreSQL, generates personalized email content, and publishes messages to RabbitMQ.
+
+It does not send emails directly. The Sender Worker (Part C) handles actual SMTP/KumoMTA delivery.
+
+### 2. Prerequisites
+
+Before using the integrated generation endpoint, make sure:
+
+- Docker and Docker Compose are installed.
+- PostgreSQL is running and the required database schema exists.
+- RabbitMQ is running and configured.
+- The Generation API has valid database and RabbitMQ credentials.
+- `GENERATION_MODE=integrated` is configured.
+- `INTERNAL_TOKEN` is configured.
+- The requested batch and accepted email records already exist in PostgreSQL.
+- The requested templates exist in PostgreSQL.
+
+### 3. Start the required services
+
+From the repository root:
+
+```bash
+docker compose up -d postgres rabbitmq generation-api
+```
+
+### 4. Check the API
+
+Base URL:
+
+```text
+http://127.0.0.1:8001
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8001/health
+```
+
+Readiness check:
+
+```bash
+curl http://127.0.0.1:8001/health/ready
+```
+
+Interactive API documentation:
+
+```text
+http://127.0.0.1:8001/docs
+```
+
+### 5. Generate emails
+
+**Endpoint:**
+
+```text
+POST /internal/generate
+```
+
+**Authentication header:**
+
+```text
+X-Internal-Token: YOUR_INTERNAL_TOKEN
+```
+
+**Example request body:**
+
+```json
+{
+  "batch_id": "00000000-0000-0000-0000-000000000001",
+  "from_email": "sender@example.com",
+  "from_name": "Example Team",
+  "items": [
+    {
+      "email_id": "00000000-0000-0000-0000-000000000002",
+      "tracking_token": "00000000-0000-0000-0000-000000000003",
+      "template_id": "otp_email",
+      "to_email": "recipient@example.com",
+      "to_name": "Asha",
+      "variables": {
+        "name": "Asha",
+        "otp": "482913"
+      }
+    }
+  ]
+}
+```
+
+**Example curl request:**
+
+```bash
+curl -X POST http://127.0.0.1:8001/internal/generate \
+  -H "Content-Type: application/json" \
+  -H "X-Internal-Token: YOUR_INTERNAL_TOKEN" \
+  -d '{
+    "batch_id": "00000000-0000-0000-0000-000000000001",
+    "from_email": "sender@example.com",
+    "from_name": "Example Team",
+    "items": [{
+      "email_id": "00000000-0000-0000-0000-000000000002",
+      "tracking_token": "00000000-0000-0000-0000-000000000003",
+      "template_id": "otp_email",
+      "to_email": "recipient@example.com",
+      "to_name": "Asha",
+      "variables": {
+        "name": "Asha",
+        "otp": "482913"
+      }
+    }]
+  }'
+```
+
+Replace the example UUIDs with actual IDs from PostgreSQL and `YOUR_INTERNAL_TOKEN` with your configured internal token.
+
+The email record must belong to the specified batch and have `accepted` status.
+
+### 6. Understand the response
+
+A successful request returns HTTP `202 Accepted`, for example:
+
+```json
+{
+  "batch_id": "00000000-0000-0000-0000-000000000001",
+  "received": 1
+}
+```
+
+**Important:** HTTP 202 means the request has been accepted for background processing. It does not guarantee that the email has been published to RabbitMQ or delivered.
+
+The Generation API performs these operations:
+
+1. Loads and locks the accepted email record from PostgreSQL.
+2. Retrieves its template and variables.
+3. Renders the subject, HTML, and plain-text content.
+4. Publishes the generated message to RabbitMQ.
+5. Waits for RabbitMQ publisher confirmation.
+6. Updates the email status to `queued` after successful publication.
+
+Part C consumes the queued message and handles actual email delivery.
+
+### 7. Preview generated email content
+
+Use the preview endpoint to render sample email content without publishing messages to RabbitMQ.
+
+```text
+POST /internal/generate/preview
+```
+
+Refer to `/docs` for the preview request schema.
+
+### 8. Important behavior
+
+- Maximum request size: 1000 items by default.
+- Only emails with `accepted` status are processed.
+- Invalid templates or rendering errors can cause an email to be marked `failed`.
+- RabbitMQ publication failures do not mark an email as `queued`.
+- HTTP `202` confirms request acceptance, not final publication or delivery.
+- Queue capacity and backpressure are handled separately by the surrounding system.
+- Actual SMTP/KumoMTA delivery is handled by Part C.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Generation API (Part B)
 
 ## 1. Overview
