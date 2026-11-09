@@ -7,13 +7,23 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: services/ingestion-api/Dockerfile
+    env_file: .env
+    command: ["python", "scripts/migrate.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -32,11 +42,15 @@ services:
     restart: unless-stopped
 
   ingestion-api:
-    build: ./services/ingestion-api
+    build:
+      context: .
+      dockerfile: services/ingestion-api/Dockerfile
     env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     healthcheck:
