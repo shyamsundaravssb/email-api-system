@@ -178,13 +178,23 @@ class SenderWorker:
             await message.ack()
             return
 
-        # Attempt SMTP delivery.
+                # Attempt SMTP delivery.
         try:
             response = await self.smtp_sender.send(email)
 
-            smtp_response = str(response[1]) if response else None
+        except Exception as exc:
+            # Only SMTP sending errors should enter the retry/DLQ flow.
+            await self._handle_smtp_failure(
+                message=message,
+                email=email,
+                error=exc,
+            )
+            return
 
-            # Record successful SMTP handoff.
+        # SMTP accepted the email. Record the successful handoff separately.
+        smtp_response = str(response[1]) if response else None
+
+        try:
             recorded = await self.database.record_attempt(
                 email_id=email.email_id,
                 attempt_no=email.attempt,
@@ -194,21 +204,23 @@ class SenderWorker:
                 smtp_response=smtp_response,
             )
 
-            if recorded:
-                logger.info(
-                    "Email %s successfully accepted by SMTP.",
-                    email.email_id,
-                )
-
-            await message.ack()
-            return
-
-        except Exception as exc:
-            await self._handle_smtp_failure(
-                message=message,
-                email=email,
-                error=exc,
+        except Exception:
+            # Do not classify a database failure as an SMTP failure.
+            # Leave the RabbitMQ message unacknowledged for recovery.
+            logger.exception(
+                "SMTP accepted email %s, but recording success in "
+                "PostgreSQL failed. Message remains unacknowledged.",
+                email.email_id,
             )
+            raise
+
+        if recorded:
+            logger.info(
+                "Email %s successfully accepted by SMTP.",
+                email.email_id,
+            )
+
+        await message.ack()
 
     async def _handle_smtp_failure(
         self,
@@ -313,42 +325,54 @@ class SenderWorker:
 
         logger.info("Stopping sender worker...")
 
-        # Stop receiving new messages.
+        # Step 1: Stop receiving new messages.
         if self.queue is not None and self.consumer_tag is not None:
             try:
                 await self.queue.cancel(self.consumer_tag)
+                logger.info("RabbitMQ consumer cancelled.")
             except Exception:
                 logger.exception("Failed to cancel RabbitMQ consumer.")
 
             self.consumer_tag = None
 
-        # Close RabbitMQ connection.
+        # Step 2: Wait for active messages to finish.
+        # Keep RabbitMQ, SMTP, and PostgreSQL connections open
+        # while these tasks are still processing.
+        while self.active_tasks:
+            tasks = list(self.active_tasks)
+
+            logger.info(
+                "Waiting for %s active message tasks...",
+                len(tasks),
+            )
+
+            await asyncio.gather(
+                *tasks,
+                return_exceptions=True,
+            )
+
+        logger.info("All active message tasks finished.")
+
+        # Step 3: Close RabbitMQ only after processing finishes.
         if self.connection is not None:
             try:
                 await self.connection.close()
+                logger.info("RabbitMQ connection closed.")
             except Exception:
                 logger.exception("Failed to close RabbitMQ connection.")
 
             self.connection = None
-            # Wait for already-dispatched messages to finish.
-        if self.active_tasks:
-            logger.info(
-                "Waiting for %s active message tasks...",
-                len(self.active_tasks),
-            )
+            self.channel = None
+            self.queue = None
+            self.exchange = None
 
-            await asyncio.gather(
-                *list(self.active_tasks),
-                return_exceptions=True,
-            )
-
-        # Close SMTP connections.
+        # Step 4: Close SMTP connections.
         try:
             await self.smtp_sender.close()
         except Exception:
             logger.exception("Failed to close SMTP connections.")
 
-        # Close PostgreSQL pool.
+        # Step 5: Close PostgreSQL pool.
         try:
             await self.database.close()
         except Exception:
