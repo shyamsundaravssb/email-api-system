@@ -56,6 +56,10 @@ class Settings:
     smtp_password: str
     smtp_use_tls: bool
 
+    smtp_pool_size: int
+    smtp_max_active_connections: int
+    smtp_max_emails_per_connection: int
+
     log_level: str
 
 
@@ -70,6 +74,18 @@ def load_config() -> Settings:
     smtp_port = get_int_env("SMTP_PORT", 1025)
     prefetch_count = get_int_env("PREFETCH_COUNT", 50)
     concurrency = get_int_env("CONCURRENCY", 20)
+
+    smtp_pool_size = get_int_env("SMTP_POOL_SIZE", 100)
+
+    smtp_max_active_connections = get_int_env(
+        "SMTP_MAX_ACTIVE_CONNECTIONS",
+        20,
+    )
+
+    smtp_max_emails_per_connection = get_int_env(
+        "SMTP_MAX_EMAILS_PER_CONNECTION",
+        20,
+    )
 
     smtp_use_tls = get_bool_env("SMTP_USE_TLS", False)
 
@@ -95,10 +111,15 @@ def load_config() -> Settings:
             "Mailpit development SMTP uses port 1025 without TLS."
         )
 
+    if smtp_max_active_connections > smtp_pool_size:
+        raise ValueError(
+            "SMTP_MAX_ACTIVE_CONNECTIONS cannot exceed SMTP_POOL_SIZE."
+        )
+
     if log_level not in logging.getLevelNamesMapping():
         raise ValueError(f"Invalid LOG_LEVEL: {log_level}")
 
-    # Basic URL validation
+    # Basic URL validation.
     database = urlparse(database_url)
     rabbitmq = urlparse(rabbitmq_url)
 
@@ -118,6 +139,9 @@ def load_config() -> Settings:
         smtp_user=smtp_user,
         smtp_password=smtp_password,
         smtp_use_tls=smtp_use_tls,
+        smtp_pool_size=smtp_pool_size,
+        smtp_max_active_connections=smtp_max_active_connections,
+        smtp_max_emails_per_connection=smtp_max_emails_per_connection,
         log_level=log_level,
     )
 
