@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -82,6 +83,9 @@ class GenerationProcessor:
         create one asyncio task per recipient.
         """
 
+        start_time = time.perf_counter()
+        published_count = 0
+
         if len(request.items) > self.settings.generation_max_items:
             logger.error(
                 "Batch %s contains %s items; configured maximum is %s",
@@ -101,6 +105,8 @@ class GenerationProcessor:
         )
 
         async def worker(worker_number: int) -> None:
+            nonlocal published_count
+
             while True:
                 item = await queue.get()
 
@@ -109,10 +115,13 @@ class GenerationProcessor:
                         return
 
                     async with self.semaphore:
-                        await self.process_item(
+                        result = await self.process_item(
                             request.batch_id,
                             item,
                         )
+
+                        if result:
+                            published_count += 1
 
                 except Exception:
                     # An unexpected or infrastructure error must not
@@ -147,6 +156,23 @@ class GenerationProcessor:
                 return_exceptions=True,
             )
 
+        elapsed = time.perf_counter() - start_time
+        throughput = (
+            published_count / elapsed
+            if elapsed > 0
+            else 0
+        )
+
+        logger.info(
+            "GENERATION PERFORMANCE | batch_id=%s | "
+            "published=%s | elapsed=%.3f seconds | "
+            "throughput=%.2f emails/second",
+            request.batch_id,
+            published_count,
+            elapsed,
+            throughput,
+        )
+
         logger.info(
             "Finished processing batch %s containing %s requested emails",
             request.batch_id,
@@ -157,7 +183,7 @@ class GenerationProcessor:
         self,
         batch_id: UUID,
         item: GenerateItem,
-    ) -> None:
+    ) -> bool:
         """
         Process one email inside a database transaction.
 
@@ -178,7 +204,7 @@ class GenerationProcessor:
                         "Email %s does not exist; skipping",
                         item.email_id,
                     )
-                    return
+                    return False
 
                 if email["batch_id"] != batch_id:
                     logger.warning(
@@ -186,7 +212,7 @@ class GenerationProcessor:
                         item.email_id,
                         batch_id,
                     )
-                    return
+                    return False
 
                 # Only accepted rows are eligible for generation.
                 # queued, sent, failed, and rejected rows are skipped.
@@ -196,7 +222,7 @@ class GenerationProcessor:
                         item.email_id,
                         email["status"],
                     )
-                    return
+                    return False
 
                 template = await self.database.get_template(
                     connection,
@@ -215,7 +241,7 @@ class GenerationProcessor:
                         item.email_id,
                         email["template_id"],
                     )
-                    return
+                    return False
 
                 variables = email["variables"]
 
@@ -240,7 +266,7 @@ class GenerationProcessor:
                         item.email_id,
                         exc,
                     )
-                    return
+                    return False
 
                 # Prepare click and open tracking URLs.
                 tracking_base_url = self.settings.track_base_url
@@ -298,7 +324,7 @@ class GenerationProcessor:
                         "Email %s has an invalid account sender address",
                         item.email_id,
                     )
-                    return
+                    return False
 
                 sender_domain = sender_email.rsplit("@", 1)[1].lower()
 
@@ -350,3 +376,4 @@ class GenerationProcessor:
                     "Email %s successfully published and marked queued",
                     item.email_id,
                 )
+                return True

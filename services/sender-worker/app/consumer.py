@@ -25,7 +25,11 @@ class SenderWorker:
         self.exchange = None
 
         self.database = Database(settings.database_url)
-        self.smtp_sender = SMTPSender(pool_size=5)
+        self.smtp_sender = SMTPSender(
+            pool_size=settings.smtp_pool_size,
+            max_active_connections=settings.smtp_max_active_connections,
+            max_emails_per_connection=settings.smtp_max_emails_per_connection,
+        )
 
         self.retry_publisher = None
 
