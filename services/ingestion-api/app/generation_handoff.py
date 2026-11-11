@@ -1,11 +1,10 @@
-
 import logging
 import uuid
 
 from app.generation_client import GenerationClient
 from app.repository import (
     claim_generation_handoff,
-    fail_generation_handoff,
+    delete_failed_generation_batch,
     get_generation_payload,
     mark_generation_handoff_submitted,
     retry_generation_handoff,
@@ -105,25 +104,27 @@ async def handoff_batch_to_generation(
             # Step 5: Retry or permanently fail the handoff.
             async with db_pool.acquire() as conn:
                 if attempts >= settings.generation_handoff_max_attempts:
-                    updated = await fail_generation_handoff(
+                    deleted = await delete_failed_generation_batch(
                         conn=conn,
                         handoff_id=handoff_id,
                         claim_token=claim_token,
-                        error=str(exc),
                     )
 
-                    if updated:
+                    if deleted:
                         logger.error(
-                            "Generation handoff permanently failed",
+                            "Generation handoff exhausted all attempts. "
+                            "Batch and associated records deleted.",
                             extra={
-                                "batch_id": batch_id,
-                                "attempts": attempts,
+                                "batch_id": str(deleted["batch_id"]),
+                                "attempts": deleted["attempts"],
+                                "max_attempts": settings.generation_handoff_max_attempts,
+                                "error": str(exc)[:1000],
                             },
                         )
                     else:
                         logger.warning(
-                            "Could not mark generation handoff as failed; "
-                            "claim may have expired",
+                            "Could not delete failed batch; "
+                            "generation handoff claim may have expired.",
                             extra={"batch_id": batch_id},
                         )
 

@@ -21,10 +21,7 @@
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-max-length": 1000,
-        "x-overflow": "reject-publish"
-      }
+      "arguments": {}
     },
     {
       "name": "email.retry.1",

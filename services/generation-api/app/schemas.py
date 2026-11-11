@@ -62,7 +62,7 @@ class GenerateRequest(BaseModel):
 
     items: list[GenerateItem] = Field(
         min_length=1,
-        max_length=1000,
+        max_length=10000,
     )
 
     @model_validator(mode="after")
