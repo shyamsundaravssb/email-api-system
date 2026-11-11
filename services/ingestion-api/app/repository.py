@@ -1,4 +1,3 @@
-
 import json
 import uuid
 from typing import Any
@@ -322,6 +321,102 @@ async def fail_generation_handoff(
     )
 
     return result == "UPDATE 1"
+
+
+async def delete_failed_generation_batch(
+    conn,
+    handoff_id: uuid.UUID,
+    claim_token: uuid.UUID,
+) -> dict[str, Any] | None:
+    """
+    Delete a batch and all associated records after terminal
+    generation handoff failure.
+
+    Returns batch information if the claim is valid and deletion
+    succeeds. Returns None if the claim is no longer owned.
+    """
+
+    async with conn.transaction():
+
+        # Verify ownership and lock the handoff row.
+        handoff = await conn.fetchrow(
+            """
+            SELECT id, batch_id, attempts, last_error
+            FROM generation_handoffs
+            WHERE id = $1
+                AND status = 'processing'
+                AND claim_token = $2
+                AND locked_until > NOW()
+            FOR UPDATE
+            """,
+            handoff_id,
+            claim_token,
+        )
+
+        if handoff is None:
+            return None
+
+        batch_id = handoff["batch_id"]
+
+        # Delete records associated with individual emails.
+        await conn.execute(
+            """
+            DELETE FROM email_attempts
+            WHERE email_id IN (
+                SELECT id FROM emails WHERE batch_id = $1
+            )
+            """,
+            batch_id,
+        )
+
+        await conn.execute(
+            """
+            DELETE FROM email_events
+            WHERE email_id IN (
+                SELECT id FROM emails WHERE batch_id = $1
+            )
+            """,
+            batch_id,
+        )
+
+        await conn.execute(
+            """
+            DELETE FROM tracking_links
+            WHERE email_id IN (
+                SELECT id FROM emails WHERE batch_id = $1
+            )
+            """,
+            batch_id,
+        )
+
+        # Delete emails.
+        await conn.execute(
+            "DELETE FROM emails WHERE batch_id = $1",
+            batch_id,
+        )
+
+        # Delete batch-dependent records.
+        await conn.execute(
+            "DELETE FROM generation_handoffs WHERE batch_id = $1",
+            batch_id,
+        )
+
+        await conn.execute(
+            "DELETE FROM idempotency_keys WHERE batch_id = $1",
+            batch_id,
+        )
+
+        # Finally, delete the batch.
+        await conn.execute(
+            "DELETE FROM batches WHERE id = $1",
+            batch_id,
+        )
+
+        return {
+            "batch_id": batch_id,
+            "attempts": handoff["attempts"],
+        }
+
 
 async def retry_generation_handoff(
     conn,
